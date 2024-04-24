@@ -70,7 +70,7 @@ def train_one_epoch(model, data, epoch, optimizer, scaler, scheduler, args, tb_w
         step = num_batches_per_epoch * epoch + i
         scheduler(step)
 
-        images, new_images, texts, new_texts, hard_captions, new_hard = batch
+        images, new_images, texts, new_texts, hard_captions, num_pos_caps, new_hard = batch
 
         images = images.to(device=device, non_blocking=True)
         new_images = new_images.to(device=device, non_blocking=True)
@@ -79,6 +79,7 @@ def train_one_epoch(model, data, epoch, optimizer, scaler, scheduler, args, tb_w
         new_texts = new_texts.to(device=device, non_blocking=True)
 
         hard_captions = hard_captions.to(device=device, non_blocking=True)
+        num_pos_caps = num_pos_caps.to(device=device, non_blocking=True)
         new_hard = new_hard.to(device=device, non_blocking=True)
 
         images = torch.cat([images, new_images])
@@ -92,7 +93,7 @@ def train_one_epoch(model, data, epoch, optimizer, scaler, scheduler, args, tb_w
 
         with autocast():
             image_features, text_features, logit_scale = model(images, texts)
-            total_loss = loss(image_features, text_features, logit_scale)
+            total_loss = loss(image_features, text_features, logit_scale, num_pos_caps)
 
         if scaler is not None:
             scaler.scale(total_loss).backward()

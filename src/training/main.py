@@ -1,5 +1,5 @@
 import logging
-import os
+import os, sys
 import random
 from datetime import datetime
 
@@ -22,6 +22,8 @@ try:
     import horovod.torch as hvd
 except ImportError:
     hvd = None
+
+sys.path.append('../src')
 
 from open_clip import create_model_and_transforms, trace_model
 from training.data import get_data

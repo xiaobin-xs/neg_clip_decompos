@@ -67,6 +67,12 @@ def parse_args():
         help="For csv-like datasets, the name of the key for the hard captions."
     )
     parser.add_argument(
+        "--csv-num-cap-key",
+        type=str,
+        default="num_pos_caption",
+        help="For csv-like datasets, the name of the key for the number of pos captions."
+    )
+    parser.add_argument(
         "--csv-caption-key",
         type=str,
         default="title",

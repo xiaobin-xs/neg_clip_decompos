@@ -14,6 +14,22 @@ try:
 except ImportError:
     hvd = None
 
+def remove_duplicate_rows(tensor):
+    seen = set()
+    unique_indices = []
+    
+    # Convert tensor rows to tuples and collect indices of unique rows
+    for idx, row in enumerate(tensor):
+        row_tuple = tuple(row.tolist())
+        if row_tuple not in seen:
+            seen.add(row_tuple)
+            unique_indices.append(idx)
+    
+    # Select the unique rows based on collected indices
+    unique_tensor = tensor[unique_indices]
+    
+    return unique_tensor
+
 
 def gather_features(
         image_features,
@@ -85,7 +101,7 @@ class ClipLoss(nn.Module):
         self.prev_num_logits = 0
         self.labels = {}
 
-    def forward(self, image_features, text_features, logit_scale):
+    def forward(self, image_features, text_features, logit_scale, num_pos_caps):
         device = image_features.device
         if self.world_size > 1:
             all_image_features, all_text_features = gather_features(
@@ -114,8 +130,19 @@ class ClipLoss(nn.Module):
         else:
             labels = self.labels[device]
 
+        # image-to-multi-text CL
+        num_pos_caps = num_pos_caps.repeat(2) # repeat for alternative images
+        weight = 1.0 / num_pos_caps
+        i2mt_loss = (F.cross_entropy(logits_per_image, labels, reduction='none') * weight).mean()
+
+        # text-to-image CL
+        # # t2i_loss = F.cross_entropy(logits_per_text, labels)
+        # if num_pos_caps.float().mean() > 1:
+        #     dedup_images_features = remove_duplicate_rows(image_features)
+
+    
         total_loss = (
-            F.cross_entropy(logits_per_image, labels) +
+            i2mt_loss + # F.cross_entropy(logits_per_image, labels)
             F.cross_entropy(logits_per_text[:len(logits_per_image)], labels)
             ) / 2
         return total_loss
