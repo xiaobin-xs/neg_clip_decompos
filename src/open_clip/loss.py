@@ -14,22 +14,19 @@ try:
 except ImportError:
     hvd = None
 
-def remove_duplicate_rows(tensor):
-    seen = set()
-    unique_indices = []
-    
-    # Convert tensor rows to tuples and collect indices of unique rows
-    for idx, row in enumerate(tensor):
-        row_tuple = tuple(row.tolist())
-        if row_tuple not in seen:
-            seen.add(row_tuple)
-            unique_indices.append(idx)
-    
-    # Select the unique rows based on collected indices
-    unique_tensor = tensor[unique_indices]
-    
-    return unique_tensor
-
+def get_non_duplic_image_mask(tensor):
+    # Find unique tensors and the inverse mapping to original indices
+    _, inverse_indices = torch.unique(tensor, dim=0, return_inverse=True)
+    # mask for unique tensors, True for non-duplicated entries and the 1st occurence of duplicated entries
+    mask = torch.zeros(tensor.size(0), dtype=torch.bool)
+    idx_list = []
+    for idx, original_idx in enumerate(inverse_indices.cpu().numpy()):
+        if original_idx not in idx_list:
+            idx_list.append(original_idx)
+            mask[idx] = True
+    # if _.shape[0] < tensor.shape[0]:
+    #     print('Duplicated entries found')
+    return mask
 
 def gather_features(
         image_features,
@@ -136,13 +133,17 @@ class ClipLoss(nn.Module):
         i2mt_loss = (F.cross_entropy(logits_per_image, labels, reduction='none') * weight).mean()
 
         # text-to-image CL
-        # # t2i_loss = F.cross_entropy(logits_per_text, labels)
-        # if num_pos_caps.float().mean() > 1:
-        #     dedup_images_features = remove_duplicate_rows(image_features)
+        if num_pos_caps.float().mean() > 1:
+            non_duplic_image_mask = get_non_duplic_image_mask(logits_per_image)
+            t2i_loss = ( (F.cross_entropy(logits_per_text[:len(logits_per_image)], labels, reduction='none')
+                          ) [non_duplic_image_mask] 
+                       ).mean()
+        else:
+            t2i_loss = F.cross_entropy(logits_per_text[:len(logits_per_image)], labels)
+        
 
-    
         total_loss = (
             i2mt_loss + # F.cross_entropy(logits_per_image, labels)
-            F.cross_entropy(logits_per_text[:len(logits_per_image)], labels)
+            t2i_loss # F.cross_entropy(logits_per_text[:len(logits_per_image)], labels)
             ) / 2
         return total_loss
